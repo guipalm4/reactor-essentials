@@ -103,12 +103,39 @@ public class MonoTest {
         nameMono.subscribe(s-> log.info("The dev is {} in UpperCase", s),
                 Throwable::printStackTrace,
                 () -> log.info("PROCESS FINISHED!")
-                , Subscription::cancel);
+                , subscription -> subscription.request(5));
 
         //Then
         log.info("-------Expected------------");
 
         StepVerifier.create(nameMono)
+                .expectNext(name.toUpperCase())
+                .verifyComplete();
+    }
+
+    @Test
+    void monoDoOnMethods() {
+        //Given
+        log.info("-------Actual------------");
+
+        var name = "guipalm4";
+        Mono<Object> mono = Mono.just(name)
+                .log()
+                .map(String::toUpperCase)
+                .doOnSubscribe(subscription -> log.info("Subscribed"))
+                .doOnRequest(longNumber -> log.info("Request received, starting doing something..."))
+                .doOnNext(s -> log.info("Value is here. Executing doOnNext with {}", s))
+                .flatMap(s -> Mono.empty())
+                .doOnNext(s -> log.info("Value is here. Executing doOnNext with {}", s))//will not be executed
+                .doOnSuccess(s -> log.info("doOnSuccess executed {}", s));
+
+        //When
+        mono.subscribe(s-> log.info("The dev is {} in UpperCase", s),
+                Throwable::printStackTrace,
+                () -> log.info("PROCESS FINISHED!"));
+
+        //Then
+        StepVerifier.create(mono)
                 .expectNext(name.toUpperCase())
                 .verifyComplete();
     }
