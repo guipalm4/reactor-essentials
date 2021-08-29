@@ -2,7 +2,6 @@ package guipalm4.reactor.test;
 
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Test;
-import org.reactivestreams.Subscription;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
@@ -37,7 +36,7 @@ public class MonoTest {
         Mono<String> nameMono = Mono.just(name).log();
 
         //When
-        nameMono.subscribe(s-> log.info("The dev is {}", s));
+        nameMono.subscribe(s -> log.info("The dev is {}", s));
 
         //Then
         log.info("-------Expected------------");
@@ -54,11 +53,13 @@ public class MonoTest {
 
         var name = "guipalm4";
         Mono<String> nameMono = Mono.just(name)
-                .map(s-> {throw new RuntimeException("Testing mono with error");});
+                .map(s -> {
+                    throw new RuntimeException("Testing mono with error");
+                });
 
         //When
-        nameMono.subscribe(s-> log.info("User {}", s), s-> log.error("Something bad happened"));
-        nameMono.subscribe(s-> log.info("User {}", s), Throwable::printStackTrace);
+        nameMono.subscribe(s -> log.info("User {}", s), s -> log.error("Something bad happened"));
+        nameMono.subscribe(s -> log.info("User {}", s), Throwable::printStackTrace);
 
         //Then
         StepVerifier.create(nameMono)
@@ -77,7 +78,7 @@ public class MonoTest {
                 .map(String::toUpperCase);
 
         //When
-        nameMono.subscribe(s-> log.info("The dev is {} in UpperCase", s),
+        nameMono.subscribe(s -> log.info("The dev is {} in UpperCase", s),
                 Throwable::printStackTrace,
                 () -> log.info("PROCESS FINISHED!"));
 
@@ -100,7 +101,7 @@ public class MonoTest {
                 .map(String::toUpperCase);
 
         //When
-        nameMono.subscribe(s-> log.info("The dev is {} in UpperCase", s),
+        nameMono.subscribe(s -> log.info("The dev is {} in UpperCase", s),
                 Throwable::printStackTrace,
                 () -> log.info("PROCESS FINISHED!")
                 , subscription -> subscription.request(5));
@@ -130,13 +131,69 @@ public class MonoTest {
                 .doOnSuccess(s -> log.info("doOnSuccess executed {}", s));
 
         //When
-        mono.subscribe(s-> log.info("The dev is {} in UpperCase", s),
+        mono.subscribe(s -> log.info("The dev is {} in UpperCase", s),
                 Throwable::printStackTrace,
                 () -> log.info("PROCESS FINISHED!"));
+    }
+
+    @Test
+    void monoDoOnError() {
+
+        //When
+        Mono<Object> error = Mono.error(new IllegalArgumentException("Error illegal argument exception"))
+                .doOnError(e -> MonoTest.log.error("Message: {}", e.getMessage()))
+                .doOnNext(s -> log.info("This never execute when throw an exception"))
+                .log();
 
         //Then
-        StepVerifier.create(mono)
-                .expectNext(name.toUpperCase())
+        StepVerifier.create(error)
+                .expectError(IllegalArgumentException.class)
+                .verify();
+    }
+
+    @Test
+    void monoDoOnErrorResume() {
+
+        //Given
+        var fallbackMessage = "Be careful, something bah happened";
+
+        //When
+        Mono<Object> error = Mono.error(new IllegalArgumentException("Error illegal argument exception"))
+                .doOnError(e -> MonoTest.log.error("Message: {}", e.getMessage()))
+                .onErrorResume(s -> {
+                    log.info("Something bad happened, but i will continue");
+                    return Mono.just(fallbackMessage);
+                })
+                .log();
+
+        //Then
+        StepVerifier.create(error)
+                .expectNext(fallbackMessage)
                 .verifyComplete();
     }
+
+    @Test
+    void monoDoOnErrorReturn() {
+
+        //Given
+        var fallbackMessage = "Be careful, something bah happened";
+        var blocking = "Block Error Happened";
+
+        //When
+        Mono<Object> error = Mono.error(new IllegalArgumentException("Error illegal argument exception"))
+                .onErrorReturn(blocking)
+                //Ignored because RETURN...
+                .onErrorResume(s -> {
+                    log.info("Something bad happened, but i will continue");
+                    return Mono.just(fallbackMessage);
+                })
+                .doOnError(e -> MonoTest.log.error("Message: {}", e.getMessage()))
+                .log();
+
+        //Then
+        StepVerifier.create(error)
+                .expectNext(blocking)
+                .verifyComplete();
+    }
+
 }
